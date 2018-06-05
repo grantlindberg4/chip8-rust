@@ -1,3 +1,6 @@
+extern crate rand;
+
+use rand::{thread_rng, Rng};
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -29,7 +32,7 @@ enum Opcode {
     SkipIfKeyPressed(u16),
     SkipIfKeyNotPressed(u16),
     AssignToDelayTime(u16),
-    AssignToKeyPress(u16),
+    AssignOnKeyPress(u16),
     SetDelayTimer(u16),
     SetSoundTimer(u16),
     AddToIndexRegister(u16),
@@ -49,12 +52,23 @@ enum Pixel {
     White,
 }
 
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+enum KeyState {
+    Pressed,
+    Released,
+}
+
 #[allow(dead_code)]
 struct Cpu {
     pc: u16,
     index_reg: u16,
     registers: Vec<u8>,
+    keys: Vec<KeyState>,
+    delay_timer: u8,
+    sound_timer: u8,
     graphics: Vec<Pixel>,
+    draw_screen: bool,
     stack: Vec<u16>,
     sp: u16,
     memory: Vec<u8>,
@@ -66,7 +80,11 @@ impl Cpu {
             pc: 0x200,
             index_reg: 0,
             registers: vec![0; 16],
+            keys: vec![KeyState::Released; 16],
+            delay_timer: 0,
+            sound_timer: 0,
             graphics: vec![Pixel::Black; 64*32],
+            draw_screen: false,
             stack: vec![0; 16],
             sp: 0,
             memory: vec![0; 4096],
@@ -228,7 +246,7 @@ impl Cpu {
                         Ok(Opcode::AssignToDelayTime((opcode & 0x0F00) >> 8))
                     },
                     0x000A => {
-                        Ok(Opcode::AssignToKeyPress((opcode & 0x0F00) >> 8))
+                        Ok(Opcode::AssignOnKeyPress((opcode & 0x0F00) >> 8))
                     },
                     0x0015 => {
                         Ok(Opcode::SetDelayTimer((opcode & 0x0F00) >> 8))
@@ -267,112 +285,259 @@ impl Cpu {
         println!("Executing: {:x}", opcode);
         match self.decode(opcode)? {
             Opcode::CallRCAProgram(addr) => {
+                // This will likely never be run
                 println!("Call RCA Program at {:x}", addr);
             },
             Opcode::ClearDisplay => {
-                println!("Clear the screen");
+                for pixel in self.graphics.iter_mut() {
+                    *pixel = Pixel::Black;
+                }
+                self.draw_screen = true;
+                self.pc += 2;
             },
             Opcode::ReturnFromSubroutine => {
-                println!("Return from subroutine");
+                self.sp -= 1;
+                self.pc = self.stack[self.sp as usize];
+                self.pc += 2;
             },
             Opcode::JumpToAddr(addr) => {
-                println!("Jump to {:x}", addr);
+                self.pc = addr;
             },
             Opcode::CallSubroutine(addr) => {
-                println!("Call subroutine at {:x}", addr);
+                self.stack[self.sp as usize] = self.pc;
+                self.sp += 1;
+                self.pc = addr;
             },
             Opcode::SkipIfRegisterSet { addr, value } => {
-                println!("Skip next if {:x} equals {:x}", addr, value);
+                if self.registers[addr as usize] == value as u8 {
+                    self.pc += 4;
+                }
+                else {
+                    self.pc += 2;
+                }
             },
             Opcode::SkipIfRegisterNotSet { addr, value } => {
-                println!("Skip next if {:x} does not equal {:x}", addr, value);
+                if self.registers[addr as usize] != value as u8 {
+                    self.pc += 4;
+                }
+                else {
+                    self.pc += 2;
+                }
             },
             Opcode::SkipIfRegistersEqual { first, second } => {
-                println!("Skip next if {:x} equals {:x}", first, second);
+                if self.registers[first as usize] ==
+                   self.registers[second as usize]
+                {
+                    self.pc += 4;
+                }
+                else {
+                    self.pc += 2;
+                }
             }
             Opcode::SetRegister { addr, value } => {
-                println!("Assign {:x} to {:x}", value, addr);
+                self.registers[addr as usize] = value as u8;
+                self.pc += 2;
             },
             Opcode::AddToRegister { addr, value } => {
-                println!("Add {:x} to {:x}", value, addr);
+                self.registers[addr as usize] += value as u8;
+                self.pc += 2;
             },
             Opcode::AssignRegister { first, second } => {
-                println!("Assign {:x} to {:x}", second, first);
+                self.registers[first as usize] = second as u8;
+                self.pc += 2;
             },
             Opcode::AssignRegisterBitwiseOr { first, second } => {
-                println!("Assign {:x} | {:x} to {:x}", first, second, first);
+                self.registers[first as usize] |=
+                self.registers[second as usize];
+                self.pc += 2;
             },
             Opcode::AssignRegisterBitwiseAnd { first, second } => {
-                println!("Assign {:x} & {:x} to {:x}", first, second, first);
+                self.registers[first as usize] &=
+                self.registers[second as usize];
+                self.pc += 2;
             },
             Opcode::AssignRegisterBitwiseXor { first, second } => {
-                println!("Assign {:x} ^ {:x} to {:x}", first, second, first);
+                self.registers[first as usize] ^=
+                self.registers[second as usize];
+                self.pc += 2;
             },
             Opcode::AddRegisters { first, second } => {
-                println!("Add {:x} to {:x}", second, first);
+                let (sum, overflowed) =
+                    self.registers[first as usize].overflowing_add(
+                        self.registers[second as usize]
+                    );
+                if overflowed {
+                    self.registers[0xF] = 1;
+                }
+                else {
+                    self.registers[0xF] = 0;
+                }
+                self.registers[first as usize] = sum as u8;
+                self.pc += 2;
             },
             Opcode::SubtractRegisters { first, second } => {
-                println!("Subtract {:x} from {:x}", second, first);
+                let (diff, borrowed) =
+                    self.registers[first as usize].overflowing_sub(
+                        self.registers[second as usize]
+                    );
+                if borrowed {
+                    self.registers[0xF] = 0;
+                }
+                else {
+                    self.registers[0xF] = 1;
+                }
+                self.registers[first as usize] = diff as u8;
+                self.pc += 2;
             },
             Opcode::AssignRegisterBitshiftRight { first, second } => {
-                println!("Assign {:x} to {:x} >> 1", first, second);
+                self.registers[0xF] = self.registers[first as usize] & 0x01;
+                self.registers[first as usize] =
+                    self.registers[second as usize] >> 1;
+                self.pc += 2;
             },
             Opcode::SubtractFirstRegister { first, second } => {
-                println!("Assign {:x} - {:x} to {:x}", second, first, first);
+                let result = self.registers[second as usize] -
+                             self.registers[first as usize];
+                self.registers[first as usize] = result;
+                self.pc += 2;
             },
             Opcode::AssignRegistersBitshiftLeft { first, second } => {
-                println!("Assign {:x} and {:x} to {:x} << 1", first, second, second);
+                self.registers[0xF] =
+                    (self.registers[first as usize] & 0x80) >> 7;
+                let result = self.registers[second as usize] << 1;
+                self.registers[first as usize] = result;
+                self.registers[second as usize] = result;
+                self.pc += 2;
             },
             Opcode::SkipIfRegistersNotEqual { first, second } => {
-                println!("Skip if {:x} does not equal {:x}", first, second);
+                if self.registers[first as usize] !=
+                   self.registers[second as usize]
+                {
+                    self.pc += 4;
+                }
+                else {
+                    self.pc += 2;
+                }
             },
             Opcode::SetIndexRegister(addr) => {
-                println!("Set index register to {:x}", addr);
+                self.index_reg = addr;
+                self.pc += 2;
             },
             Opcode::SetProgramCounter { register_addr, opcode_addr } => {
-                println!("Set program counter to {:x} + {:x}", register_addr, opcode_addr);
+                self.pc = register_addr + opcode_addr;
             },
             Opcode::AssignRandomValue { addr, value } => {
-                println!("Assign rand() & {:x} to {:x}", value, addr);
+                let result = thread_rng().gen_range(0, 255) & value;
+                self.registers[addr as usize] = result as u8;
+                self.pc += 2;
             },
             Opcode::Draw { x, y, height } => {
-                println!("Draw sprite at ({:x}, {:x}, {:x})", x, y, height);
+                let mut pixel_was_unset = false;
+                self.registers[0xF] = 0;
+
+                for col in 0..height {
+                    let cell = self.memory[(self.index_reg + col) as usize];
+                    for row in 0..8 {
+                        let i = ((row+x)*32 + (col+y)) as usize;
+                        let curr_pixel = self.graphics[i];
+                        let new_pixel = cell & (0b1000_0000 >> row);
+                        let new_pixel = match new_pixel {
+                            0 => Pixel::Black,
+                            _ => Pixel::White,
+                        };
+
+                        match (curr_pixel, new_pixel) {
+                            (Pixel::White, Pixel::Black) => {
+                                pixel_was_unset = true;
+                            },
+                            _ => {},
+                        }
+                        self.graphics[i] = new_pixel;
+                    }
+                }
+                self.registers[0xF] = match pixel_was_unset {
+                    true => 1,
+                    false => 0,
+                };
+                self.draw_screen = true;
+                self.pc += 2;
             },
             Opcode::SkipIfKeyPressed(addr) => {
-                println!("Skip if key pressed at {:x}", addr);
+                let key = self.registers[addr as usize];
+                match self.keys[key as usize] {
+                    KeyState::Pressed => {
+                        self.pc += 4;
+                    },
+                    _ => {
+                        self.pc += 2;
+                    },
+                }
             },
             Opcode::SkipIfKeyNotPressed(addr) => {
-                println!("Skip if key not pressed at {:x}", addr);
+                let key = self.registers[addr as usize];
+                match self.keys[key as usize] {
+                    KeyState::Released => {
+                        self.pc += 4;
+                    },
+                    _ => {
+                        self.pc += 2;
+                    },
+                }
             },
             Opcode::AssignToDelayTime(addr) => {
-                println!("Assign delay time to {:x}", addr);
+                self.registers[addr as usize] = self.delay_timer;
+                self.pc += 2;
             },
-            Opcode::AssignToKeyPress(addr) => {
-                println!("Assign key press to {:x}", addr);
+            Opcode::AssignOnKeyPress(addr) => {
+                for (i, key) in self.keys.iter().enumerate() {
+                    match *key {
+                        KeyState::Pressed => {
+                            self.registers[addr as usize] = i as u8;
+                            self.pc += 2;
+                            break;
+                        },
+                        _ => {},
+                    }
+                }
             },
             Opcode::SetDelayTimer(addr) => {
-                println!("Set delay timer to value of {:x}", addr);
+                self.delay_timer = addr as u8;
+                self.pc += 2;
             },
             Opcode::SetSoundTimer(addr) => {
-                println!("Set sound timer to value of {:x}", addr);
+                self.sound_timer = addr as u8;
+                self.pc += 2;
             },
             Opcode::AddToIndexRegister(addr) => {
-                println!("Add value of {:x} to index register", addr);
+                self.index_reg += addr;
+                self.pc += 2;
             },
             Opcode::SetIndexRegisterToSpriteAddr(addr) => {
-                println!("Set index register to location of sprite in {:x}", addr);
+                self.index_reg = (self.registers[addr as usize] * 0x5) as u16;
+                self.pc += 2;
             },
             Opcode::SetBCD(addr) => {
-                println!("Set index register to BCD of {:x}", addr);
+                let reg = self.registers[addr as usize];
+                self.memory[self.index_reg as usize] = reg / 100;
+                self.memory[(self.index_reg+1) as usize] = (reg/10) % 10;
+                self.memory[(self.index_reg+2) as usize] = (reg%100) % 10;
+                self.pc += 2;
             },
             Opcode::DumpRegister(addr) => {
-                println!("Store value at 0x0 to {:x}", addr);
+                for i in 0..addr+1 {
+                    self.memory[self.index_reg as usize] = self.registers[i as usize];
+                    self.index_reg += 1;
+                }
+                self.pc += 2;
             },
             Opcode::LoadRegister(addr) => {
-                println!("Fill value at 0x0 to {:x}", addr);
+                for i in 0..addr+1 {
+                    self.registers[i as usize] = self.memory[self.index_reg as usize];
+                    self.index_reg += 1;
+                }
+                self.pc += 2;
             },
         }
-        self.pc += 2;
         Ok(())
     }
 }
