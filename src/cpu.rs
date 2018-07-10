@@ -55,8 +55,8 @@ pub struct Cpu {
     keys: Vec<core::KeyState>,
     delay_timer: u8,
     sound_timer: u8,
-    display: Vec<core::Pixel>,
-    draw_screen: bool,
+    pub display: Vec<core::Pixel>,
+    pub draw_screen: bool,
     stack: Vec<u16>,
     sp: u16,
     memory: Vec<u8>,
@@ -87,12 +87,6 @@ impl Cpu {
             self.memory[i + 512] = buffer[i];
         }
         Ok(())
-    }
-
-    pub fn run(&mut self) -> Result<(), CpuError> {
-        loop {
-            self.step()?;
-        }
     }
 
     fn decode(&mut self, opcode: u16) -> Result<Opcode, CpuError> {
@@ -266,11 +260,11 @@ impl Cpu {
         }
     }
 
-    fn step(&mut self) -> Result<(), CpuError> {
+    pub fn step(&mut self) -> Result<(), CpuError> {
         let opcode_high = self.memory[self.pc as usize];
         let opcode_low = self.memory[self.pc as usize + 1];
         let opcode = (opcode_high as u16) << 8 | opcode_low as u16;
-        println!("Executing: {:x}", opcode);
+        // println!("Executing: {:x}", opcode);
         match self.decode(opcode)? {
             Opcode::CallRCAProgram(addr) => {
                 // This will likely never be run

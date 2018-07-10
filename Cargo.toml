@@ -5,3 +5,4 @@ authors = ["Grant Lindberg <grantlindberg4@gmail.com>"]
 
 [dependencies]
 rand = "*"
+sdl2 = "0.31.0"

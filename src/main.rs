@@ -1,4 +1,9 @@
 extern crate rand;
+extern crate sdl2;
+
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
+use std::time::Duration;
 
 mod cpu;
 mod core;
@@ -9,10 +14,29 @@ fn main() {
         Ok(()) => {},
         Err(err) => { panic!("Error: {}", err) },
     }
-    match cpu.run() {
-        Ok(()) => {},
-        Err(cpu::CpuError::IllegalInstruction(opcode)) => {
-            panic!("Illegal CPU instruction: {:x}", opcode)
-        },
+
+    let sdl_context = sdl2::init().unwrap();
+    let mut event_pump = sdl_context.event_pump().unwrap();
+    let mut core = core::Core::new(&sdl_context);
+    'running: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit {..} |
+                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                    break 'running
+                },
+                _ => {},
+            }
+        }
+        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 600));
+        match cpu.step() {
+            Ok(()) => {},
+            Err(cpu::CpuError::IllegalInstruction(opcode)) => {
+                panic!("Illegal CPU instruction: {:x}", opcode)
+            },
+        }
+        if cpu.draw_screen {
+            core.draw(&mut cpu);
+        }
     }
 }
