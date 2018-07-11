@@ -79,6 +79,12 @@ impl Cpu {
         }
     }
 
+    pub fn load_fontset(&mut self) {
+        for i in 0..80 {
+            self.memory[i] = core::FONTSET[i];
+        }
+    }
+
     pub fn load_rom(&mut self, path: &str) -> std::io::Result<()> {
         let mut rom = File::open(path)?;
         let mut buffer = vec![];

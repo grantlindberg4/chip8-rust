@@ -10,6 +10,7 @@ mod core;
 
 fn main() {
     let mut cpu = cpu::Cpu::new();
+    cpu.load_fontset();
     match cpu.load_rom("./roms/pong2.c8") {
         Ok(()) => {},
         Err(err) => { panic!("Error: {}", err) },
