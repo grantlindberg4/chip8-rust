@@ -457,7 +457,7 @@ impl Cpu {
                     let pixel = self.memory[(self.index_reg + y_line) as usize];
                     for x_line in 0..8 {
                         if pixel & (0x80 >> x_line) != 0 {
-                            let sprite_loc = loc_x as u16 + x_line + ((loc_y as u16 + y_line)*64);
+                            let sprite_loc = (loc_x as u16 + x_line + ((loc_y as u16 + y_line)*64)) % (32*64);
                             let curr_pixel = self.display[sprite_loc as usize];
                             let new_pixel;
                             match curr_pixel {
