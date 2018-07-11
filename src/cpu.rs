@@ -208,7 +208,7 @@ impl Cpu {
                 Ok(Opcode::Draw {
                     x: (opcode & 0x0F00) >> 8,
                     y: (opcode & 0x00F0) >> 4,
-                    height: opcode & 0x00FF,
+                    height: opcode & 0x000F,
                 })
             },
             0xE000...0xEFFF => {
@@ -414,33 +414,56 @@ impl Cpu {
                 self.pc += 2;
             },
             Opcode::Draw { x, y, height } => {
-                let mut pixel_was_unset = false;
+                // let mut pixel_was_unset = false;
+                // self.registers[0xF] = 0;
+
+                // for col in 0..height {
+                //     let cell = self.memory[(self.index_reg + col) as usize];
+                //     for row in 0..8 {
+                //         let i = ((row+x)*32 + (col+y)) as usize;
+                //         let curr_pixel = self.display[i];
+                //         let new_pixel = cell & (0b1000_0000 >> row);
+                //         let new_pixel = match new_pixel {
+                //             0 => core::Pixel::Black,
+                //             _ => core::Pixel::White,
+                //         };
+
+                //         match (curr_pixel, new_pixel) {
+                //             (core::Pixel::White, core::Pixel::Black) => {
+                //                 pixel_was_unset = true;
+                //             },
+                //             _ => {},
+                //         }
+                //         self.display[i] = new_pixel;
+                //     }
+                // }
+                // self.registers[0xF] = match pixel_was_unset {
+                //     true => 1,
+                //     false => 0,
+                // };
+
+                let loc_x = self.registers[x as usize];
+                let loc_y = self.registers[y as usize];
                 self.registers[0xF] = 0;
-
-                for col in 0..height {
-                    let cell = self.memory[(self.index_reg + col) as usize];
-                    for row in 0..8 {
-                        let i = ((row+x)*32 + (col+y)) as usize;
-                        let curr_pixel = self.display[i];
-                        let new_pixel = cell & (0b1000_0000 >> row);
-                        let new_pixel = match new_pixel {
-                            0 => core::Pixel::Black,
-                            _ => core::Pixel::White,
-                        };
-
-                        match (curr_pixel, new_pixel) {
-                            (core::Pixel::White, core::Pixel::Black) => {
-                                pixel_was_unset = true;
-                            },
-                            _ => {},
+                for y_line in 0..height {
+                    let pixel = self.memory[(self.index_reg + y_line) as usize];
+                    for x_line in 0..8 {
+                        if pixel & (0x80 >> x_line) != 0 {
+                            let sprite_loc = loc_x as u16 + x_line + ((loc_y as u16 + y_line)*64);
+                            let curr_pixel = self.display[sprite_loc as usize];
+                            let new_pixel;
+                            match curr_pixel {
+                                core::Pixel::Black => {
+                                    self.registers[0xF] = 1;
+                                    new_pixel = core::Pixel::White;
+                                },
+                                _ => { new_pixel = core::Pixel::Black },
+                            }
+                            self.display[sprite_loc as usize] = new_pixel;
                         }
-                        self.display[i] = new_pixel;
                     }
                 }
-                self.registers[0xF] = match pixel_was_unset {
-                    true => 1,
-                    false => 0,
-                };
+
                 self.draw_screen = true;
                 self.pc += 2;
             },
