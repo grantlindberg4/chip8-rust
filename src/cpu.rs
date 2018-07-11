@@ -52,7 +52,7 @@ pub struct Cpu {
     pc: u16,
     index_reg: u16,
     registers: Vec<u8>,
-    keys: Vec<core::KeyState>,
+    pub keys: Vec<core::KeyState>,
     delay_timer: u8,
     sound_timer: u8,
     pub display: Vec<core::Pixel>,
@@ -270,7 +270,7 @@ impl Cpu {
         let opcode_high = self.memory[self.pc as usize];
         let opcode_low = self.memory[self.pc as usize + 1];
         let opcode = (opcode_high as u16) << 8 | opcode_low as u16;
-        // println!("Executing: {:x}", opcode);
+        println!("Executing: {:x}", opcode);
         match self.decode(opcode)? {
             Opcode::CallRCAProgram(addr) => {
                 // This will likely never be run
@@ -327,7 +327,9 @@ impl Cpu {
                 self.pc += 2;
             },
             Opcode::AddToRegister { addr, value } => {
-                self.registers[addr as usize] += value as u8;
+                let initial_value = self.registers[addr as usize] as u16;
+                let sum = initial_value + value as u16;
+                self.registers[addr as usize] = sum as u8;
                 self.pc += 2;
             },
             Opcode::AssignRegister { first, second } => {

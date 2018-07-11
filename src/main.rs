@@ -26,6 +26,12 @@ fn main() {
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                     break 'running
                 },
+                Event::KeyDown { keycode: Some(keycode), .. } => {
+                    core.handle_key_down(&mut cpu, keycode)
+                },
+                Event::KeyUp { keycode: Some(keycode), .. } => {
+                    core.handle_key_up(&mut cpu, keycode)
+                },
                 _ => {},
             }
         }

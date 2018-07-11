@@ -1,4 +1,5 @@
 use sdl2::pixels::Color;
+use sdl2::keyboard::Keycode;
 use sdl2::rect::Rect;
 use sdl2::video::Window;
 use sdl2::render::Canvas;
@@ -34,7 +35,6 @@ pub enum Pixel {
 }
 
 #[derive(Clone, Copy)]
-#[allow(dead_code)]
 pub enum KeyState {
     Pressed,
     Released,
@@ -78,5 +78,49 @@ impl Core {
             let _ = self.canvas.fill_rect(Rect::new(x as i32, y as i32, SCALE, SCALE));
         }
         self.canvas.present();
+    }
+
+    pub fn handle_key_down(&mut self, cpu: &mut Cpu, keycode: Keycode) {
+        match keycode {
+            Keycode::Num1 => { cpu.keys[0x1] = KeyState::Pressed },
+            Keycode::Num2 => { cpu.keys[0x2] = KeyState::Pressed },
+            Keycode::Num3 => { cpu.keys[0x3] = KeyState::Pressed },
+            Keycode::Num4 => { cpu.keys[0xC] = KeyState::Pressed },
+            Keycode::Q => { cpu.keys[0x4] = KeyState::Pressed },
+            Keycode::W => { cpu.keys[0x5] = KeyState::Pressed },
+            Keycode::E => { cpu.keys[0x6] = KeyState::Pressed },
+            Keycode::R => { cpu.keys[0xD] = KeyState::Pressed },
+            Keycode::A => { cpu.keys[0x7] = KeyState::Pressed },
+            Keycode::S => { cpu.keys[0x8] = KeyState::Pressed },
+            Keycode::D => { cpu.keys[0x9] = KeyState::Pressed },
+            Keycode::F => { cpu.keys[0xE] = KeyState::Pressed },
+            Keycode::Z => { cpu.keys[0xA] = KeyState::Pressed },
+            Keycode::X => { cpu.keys[0x0] = KeyState::Pressed },
+            Keycode::C => { cpu.keys[0xB] = KeyState::Pressed },
+            Keycode::V => { cpu.keys[0xF] = KeyState::Pressed },
+            _ => {},
+        }
+    }
+
+    pub fn handle_key_up(&mut self, cpu: &mut Cpu, keycode: Keycode) {
+        match keycode {
+            Keycode::Num1 => { cpu.keys[0x1] = KeyState::Released },
+            Keycode::Num2 => { cpu.keys[0x2] = KeyState::Released },
+            Keycode::Num3 => { cpu.keys[0x3] = KeyState::Released },
+            Keycode::Num4 => { cpu.keys[0xC] = KeyState::Released },
+            Keycode::Q => { cpu.keys[0x4] = KeyState::Released },
+            Keycode::W => { cpu.keys[0x5] = KeyState::Released },
+            Keycode::E => { cpu.keys[0x6] = KeyState::Released },
+            Keycode::R => { cpu.keys[0xD] = KeyState::Released },
+            Keycode::A => { cpu.keys[0x7] = KeyState::Released },
+            Keycode::S => { cpu.keys[0x8] = KeyState::Released },
+            Keycode::D => { cpu.keys[0x9] = KeyState::Released },
+            Keycode::F => { cpu.keys[0xE] = KeyState::Released },
+            Keycode::Z => { cpu.keys[0xA] = KeyState::Released },
+            Keycode::X => { cpu.keys[0x0] = KeyState::Released },
+            Keycode::C => { cpu.keys[0xB] = KeyState::Released },
+            Keycode::V => { cpu.keys[0xF] = KeyState::Released },
+            _ => {},
+        }
     }
 }
