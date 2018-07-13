@@ -4,6 +4,7 @@ use std::io::prelude::*;
 use rand::{thread_rng, Rng};
 
 use core;
+use core::Core;
 
 pub enum Opcode {
     CallRCAProgram(u16),
@@ -47,7 +48,6 @@ pub enum CpuError {
     IllegalInstruction(u16),
 }
 
-#[allow(dead_code)]
 pub struct Cpu {
     pc: u16,
     index_reg: u16,
@@ -55,6 +55,7 @@ pub struct Cpu {
     pub keys: Vec<core::KeyState>,
     delay_timer: u8,
     sound_timer: u8,
+    counter: u8,
     pub display: Vec<core::Pixel>,
     pub draw_screen: bool,
     stack: Vec<u16>,
@@ -71,6 +72,7 @@ impl Cpu {
             keys: vec![core::KeyState::Released; 16],
             delay_timer: 0,
             sound_timer: 0,
+            counter: 10,
             display: vec![core::Pixel::Black; 64*32],
             draw_screen: false,
             stack: vec![0; 16],
@@ -270,7 +272,7 @@ impl Cpu {
         let opcode_high = self.memory[self.pc as usize];
         let opcode_low = self.memory[self.pc as usize + 1];
         let opcode = (opcode_high as u16) << 8 | opcode_low as u16;
-        println!("Executing: {:x}", opcode);
+        // println!("Executing: {:x}", opcode);
         match self.decode(opcode)? {
             Opcode::CallRCAProgram(addr) => {
                 // This will likely never be run
@@ -514,11 +516,11 @@ impl Cpu {
                 }
             },
             Opcode::SetDelayTimer(addr) => {
-                self.delay_timer = addr as u8;
+                self.delay_timer = self.registers[addr as usize];
                 self.pc += 2;
             },
             Opcode::SetSoundTimer(addr) => {
-                self.sound_timer = addr as u8;
+                self.sound_timer = self.registers[addr as usize];
                 self.pc += 2;
             },
             Opcode::AddToIndexRegister(addr) => {
@@ -554,5 +556,22 @@ impl Cpu {
             },
         }
         Ok(())
+    }
+
+    pub fn update_timers(&mut self, core: &mut Core) {
+        if self.counter == 10 {
+            if self.delay_timer > 0 { self.delay_timer -= 1; }
+            if self.sound_timer > 0 {
+                if self.sound_timer == 1 { core.play_sound(); }
+                self.sound_timer -= 1;
+            }
+            else {
+                core.stop_sound();
+            }
+            self.counter = 0;
+        }
+        else {
+            self.counter += 1;
+        }
     }
 }

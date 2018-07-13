@@ -42,6 +42,7 @@ fn main() {
                 panic!("Illegal CPU instruction: {:x}", opcode)
             },
         }
+        cpu.update_timers(&mut core);
         if cpu.draw_screen {
             core.draw(&mut cpu);
         }
