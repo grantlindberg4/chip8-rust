@@ -8,26 +8,9 @@ use sdl2::Sdl;
 
 use cpu::Cpu;
 
-const SCALE: u32 = 12;
-
-pub static FONTSET: [u8; 80] = [
-    0xF0, 0x90, 0x90, 0x90, 0xF0,
-    0x20, 0x60, 0x20, 0x20, 0x70,
-    0xF0, 0x10, 0xF0, 0x80, 0xF0,
-    0xF0, 0x10, 0xF0, 0x10, 0xF0,
-    0x90, 0x90, 0xF0, 0x10, 0x10,
-    0xF0, 0x80, 0xF0, 0x10, 0xF0,
-    0xF0, 0x80, 0xF0, 0x90, 0xF0,
-    0xF0, 0x10, 0x20, 0x40, 0x40,
-    0xF0, 0x90, 0xF0, 0x90, 0xF0,
-    0xF0, 0x90, 0xF0, 0x10, 0xF0,
-    0xF0, 0x90, 0xF0, 0x90, 0x90,
-    0xE0, 0x90, 0xE0, 0x90, 0xE0,
-    0xF0, 0x80, 0x80, 0x80, 0xF0,
-    0xE0, 0x90, 0x90, 0x90, 0xE0,
-    0xF0, 0x80, 0xF0, 0x80, 0xF0,
-    0xF0, 0x80, 0xF0, 0x80, 0x80,
-];
+pub const DISPLAY_HEIGHT: u32 = 32;
+pub const DISPLAY_WIDTH: u32 = 64;
+const SCALE_FACTOR: u32 = 12;
 
 #[derive(Clone, Copy)]
 pub enum Pixel {
@@ -71,7 +54,11 @@ pub struct Core {
 impl Core {
     pub fn new(sdl_context: &Sdl) -> Self {
         let video_subsystem = sdl_context.video().unwrap();
-        let window = video_subsystem.window("Chip8-Rust", 64*SCALE, 32*SCALE)
+        let window = video_subsystem.window(
+            "Chip8-Rust",
+            DISPLAY_WIDTH*SCALE_FACTOR,
+            DISPLAY_HEIGHT*SCALE_FACTOR
+        )
                                     .position_centered()
                                     .opengl()
                                     .build()
@@ -106,10 +93,10 @@ impl Core {
     }
 
     pub fn draw(&mut self, cpu: &mut Cpu) {
-        for i in 0..64*32 {
+        for i in 0..(DISPLAY_WIDTH*DISPLAY_HEIGHT) as usize {
             let curr_pixel = cpu.display[i];
-            let x = (i % 64) * SCALE as usize;
-            let y = (i / 64) * SCALE as usize;
+            let x = (i % DISPLAY_WIDTH as usize) * SCALE_FACTOR as usize;
+            let y = (i / DISPLAY_WIDTH as usize) * SCALE_FACTOR as usize;
 
             self.canvas.set_draw_color(Color::RGB(0, 0, 0));
             match curr_pixel {
@@ -118,7 +105,12 @@ impl Core {
                 },
                 _ => {},
             }
-            let _ = self.canvas.fill_rect(Rect::new(x as i32, y as i32, SCALE, SCALE));
+            let _ = self.canvas.fill_rect(Rect::new(
+                x as i32,
+                y as i32,
+                SCALE_FACTOR,
+                SCALE_FACTOR
+            ));
         }
         self.canvas.present();
     }

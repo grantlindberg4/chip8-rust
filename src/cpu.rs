@@ -1,7 +1,11 @@
 use std;
 use std::fs::File;
 use std::io::prelude::*;
+use std::time::Duration;
 use rand::{thread_rng, Rng};
+use sdl2::keyboard::Keycode;
+use sdl2::event::Event;
+use sdl2::Sdl;
 
 use core;
 use core::Core;
@@ -73,7 +77,10 @@ impl Cpu {
             delay_timer: 0,
             sound_timer: 0,
             counter: 10,
-            display: vec![core::Pixel::Black; 64*32],
+            display: vec![
+                core::Pixel::Black;
+                (core::DISPLAY_WIDTH*core::DISPLAY_HEIGHT) as usize
+            ],
             draw_screen: false,
             stack: vec![0; 16],
             sp: 0,
@@ -82,8 +89,26 @@ impl Cpu {
     }
 
     pub fn load_fontset(&mut self) {
+        let fontset: [u8; 80] = [
+            0xF0, 0x90, 0x90, 0x90, 0xF0,
+            0x20, 0x60, 0x20, 0x20, 0x70,
+            0xF0, 0x10, 0xF0, 0x80, 0xF0,
+            0xF0, 0x10, 0xF0, 0x10, 0xF0,
+            0x90, 0x90, 0xF0, 0x10, 0x10,
+            0xF0, 0x80, 0xF0, 0x10, 0xF0,
+            0xF0, 0x80, 0xF0, 0x90, 0xF0,
+            0xF0, 0x10, 0x20, 0x40, 0x40,
+            0xF0, 0x90, 0xF0, 0x90, 0xF0,
+            0xF0, 0x90, 0xF0, 0x10, 0xF0,
+            0xF0, 0x90, 0xF0, 0x90, 0x90,
+            0xE0, 0x90, 0xE0, 0x90, 0xE0,
+            0xF0, 0x80, 0x80, 0x80, 0xF0,
+            0xE0, 0x90, 0x90, 0x90, 0xE0,
+            0xF0, 0x80, 0xF0, 0x80, 0xF0,
+            0xF0, 0x80, 0xF0, 0x80, 0x80,
+        ];
         for i in 0..80 {
-            self.memory[i] = core::FONTSET[i];
+            self.memory[i] = fontset[i];
         }
     }
 
@@ -268,7 +293,7 @@ impl Cpu {
         }
     }
 
-    pub fn step(&mut self) -> Result<(), CpuError> {
+    fn step(&mut self) -> Result<(), CpuError> {
         let opcode_high = self.memory[self.pc as usize];
         let opcode_low = self.memory[self.pc as usize + 1];
         let opcode = (opcode_high as u16) << 8 | opcode_low as u16;
@@ -456,11 +481,20 @@ impl Cpu {
                 let loc_y = self.registers[y as usize];
                 self.registers[0xF] = 0;
                 for y_line in 0..height {
-                    let pixel = self.memory[(self.index_reg + y_line) as usize];
+                    let addr = self.index_reg + y_line;
+                    let pixel = self.memory[addr as usize];
                     for x_line in 0..8 {
                         if pixel & (0x80 >> x_line) != 0 {
-                            let sprite_loc = (loc_x as u16 + x_line + ((loc_y as u16 + y_line)*64)) % (32*64);
-                            let curr_pixel = self.display[sprite_loc as usize];
+                            let sprite_loc = loc_x as u16 + x_line +
+                                             ((loc_y as u16 + y_line)*
+                                              core::DISPLAY_WIDTH as u16);
+                            let screen_size = (
+                                core::DISPLAY_HEIGHT*core::DISPLAY_WIDTH
+                            ) as u16;
+                            let relative_loc = sprite_loc % screen_size;
+                            let curr_pixel = {
+                                self.display[relative_loc as usize]
+                            };
                             let new_pixel;
                             match curr_pixel {
                                 core::Pixel::Black => {
@@ -469,7 +503,7 @@ impl Cpu {
                                 },
                                 _ => { new_pixel = core::Pixel::Black },
                             }
-                            self.display[sprite_loc as usize] = new_pixel;
+                            self.display[relative_loc as usize] = new_pixel;
                         }
                     }
                 }
@@ -558,7 +592,36 @@ impl Cpu {
         Ok(())
     }
 
-    pub fn update_timers(&mut self, core: &mut Core) {
+    pub fn run(&mut self, sdl_context: &Sdl) -> Result<(), CpuError> {
+        let mut event_pump = sdl_context.event_pump().unwrap();
+        let mut core = core::Core::new(&sdl_context);
+        'running: loop {
+            for event in event_pump.poll_iter() {
+                match event {
+                    Event::Quit {..} |
+                    Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                        break 'running
+                    },
+                    Event::KeyDown { keycode: Some(keycode), .. } => {
+                        core.handle_key_down(self, keycode)
+                    },
+                    Event::KeyUp { keycode: Some(keycode), .. } => {
+                        core.handle_key_up(self, keycode)
+                    },
+                    _ => {},
+                }
+            }
+            ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 600));
+            self.step()?;
+            self.update_timers(&mut core);
+            if self.draw_screen {
+                core.draw(self);
+            }
+        }
+        Ok(())
+    }
+
+    fn update_timers(&mut self, core: &mut Core) {
         if self.counter == 10 {
             if self.delay_timer > 0 { self.delay_timer -= 1; }
             if self.sound_timer > 0 {
