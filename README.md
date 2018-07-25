@@ -18,20 +18,30 @@ This program relies on both the Rust programming language and SDL to be installe
 Chip-8 Keypad-to-Keyboard Conversion Chart
 
 Chip-8 Keypad:
-|   |     |     |    |
-|---|:---:|:---:|---:|
-| 1 |  2  |  3  |  C |
-| 4 |  5  |  6  |  D |
-| 7 |  8  |  9  |  E |
-| A |  0  |  B  |  F |
+```
++---+---+---+---+
+| 1 | 2 | 3 | C |
++---+---+---+---+
+| 4 | 5 | 6 | D |
++---+---+---+---+
+| 7 | 8 | 9 | E |
++---+---+---+---+
+| A | 0 | B | F |
++---+---+---+---+
+```
 
 Keyboard:
-|   |     |     |    |
-|---|:---:|:---:|---:|
-| 1 |  2  |  3  |  4 |
-| Q |  W  |  E  |  R |
-| A |  S  |  D  |  F |
-| Z |  X  |  C  |  V |
+```
++---+---+---+---+
+| 1 | 2 | 3 | 4 |
++---+---+---+---+
+| Q | W | E | R |
++---+---+---+---+
+| A | S | D | F |
++---+---+---+---+
+| Z | X | C | V |
++---+---+---+---+
+```
 
 ## Notes
 The draw method of this emulator is still incomplete, and many applications do not render properly as a result; pong, however, should run fine. The Chip-8 is known to have a major problem with flickering, so unfortunately there is no good way of mitigating this effect. In addition, I would like to work on fine-tuning the clock speed; while this has not necessarily proved to be a problem with the Chip-8 in particular, other systems (NES, Gamecube, etc.) may simply not run well because of it. I suggest you look at the credits for resources if you wish to go about creating your own Chip-8 emulator.
