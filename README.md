@@ -6,9 +6,9 @@ I've been interested in emulation for a while now; I use emulators such as Dolph
 * Allows the user to specify an application to emulate using the command line
 * Graphics and sound are rendered using SDL
 ## Prerequisites
-This program relies on both the Rust programming language and SDL to be installed in order to work.<br>
-[Learn how to install Rust here](https://www.rust-lang.org/en-US/install.html)<br>
-[Learn how to install SDL here](https://github.com/Rust-SDL2/rust-sdl2)
+This program relies on both the Rust programming language and SDL to be installed in order to work.
+* [Learn how to install Rust here](https://www.rust-lang.org/en-US/install.html)
+* [Learn how to install SDL here](https://github.com/Rust-SDL2/rust-sdl2)
 ## Usage
 1. First, clone the repository to your local machine by typing `git clone https://github.com/grantlindberg4/chip8-rust.git`.
 2. Locate the folder where you cloned the repository and type `cd chip8-rust`.
