@@ -32,7 +32,7 @@ pub enum Opcode {
     AssignRegistersBitshiftLeft { first: u16, second: u16 },
     SkipIfRegistersNotEqual { first: u16, second: u16 },
     SetIndexRegister(u16),
-    SetProgramCounter { register_addr: u16, opcode_addr: u16 },
+    SetProgramCounter(u16),
     AssignRandomValue { addr: u16, value: u16 },
     Draw { x: u16, y: u16, height: u16 },
     SkipIfKeyPressed(u16),
@@ -225,12 +225,7 @@ impl Cpu {
                 })
             },
             0xA000...0xAFFF => Ok(Opcode::SetIndexRegister(opcode & 0x0FFF)),
-            0xB000...0xBFFF => {
-                Ok(Opcode::SetProgramCounter {
-                    register_addr: 0x0000,
-                    opcode_addr: opcode & 0x0FFF,
-                })
-            },
+            0xB000...0xBFFF => Ok(Opcode::SetProgramCounter(opcode & 0x0FFF)),
             0xC000...0xCFFF => {
                 Ok(Opcode::AssignRandomValue {
                     addr: (opcode & 0x0F00) >> 8,
@@ -313,13 +308,12 @@ impl Cpu {
             Opcode::ReturnFromSubroutine => {
                 self.sp -= 1;
                 self.pc = self.stack[self.sp as usize];
-                self.pc += 2;
             },
             Opcode::JumpToAddr(addr) => {
                 self.pc = addr;
             },
             Opcode::CallSubroutine(addr) => {
-                self.stack[self.sp as usize] = self.pc;
+                self.stack[self.sp as usize] = self.pc + 2;
                 self.sp += 1;
                 self.pc = addr;
             },
@@ -340,9 +334,9 @@ impl Cpu {
                 }
             },
             Opcode::SkipIfRegistersEqual { first, second } => {
-                if self.registers[first as usize] ==
-                   self.registers[second as usize]
-                {
+                let initial = self.registers[first as usize];
+                let other = self.registers[second as usize];
+                if initial == other {
                     self.pc += 4;
                 }
                 else {
@@ -360,30 +354,33 @@ impl Cpu {
                 self.pc += 2;
             },
             Opcode::AssignRegister { first, second } => {
-                self.registers[first as usize] = second as u8;
+                let other = self.registers[second as usize];
+                self.registers[first as usize] = other;
                 self.pc += 2;
             },
             Opcode::AssignRegisterBitwiseOr { first, second } => {
-                self.registers[first as usize] |=
-                self.registers[second as usize];
+                let initial = self.registers[first as usize];
+                let other = self.registers[second as usize];
+                self.registers[first as usize] = initial | other;
                 self.pc += 2;
             },
             Opcode::AssignRegisterBitwiseAnd { first, second } => {
-                self.registers[first as usize] &=
-                self.registers[second as usize];
+                let initial = self.registers[first as usize];
+                let other = self.registers[second as usize];
+                self.registers[first as usize] = initial & other;
                 self.pc += 2;
             },
             Opcode::AssignRegisterBitwiseXor { first, second } => {
-                self.registers[first as usize] ^=
-                self.registers[second as usize];
+                let initial = self.registers[first as usize];
+                let other = self.registers[second as usize];
+                self.registers[first as usize] = initial ^ other;
                 self.pc += 2;
             },
             Opcode::AddRegisters { first, second } => {
-                let (sum, overflowed) =
-                    self.registers[first as usize].overflowing_add(
-                        self.registers[second as usize]
-                    );
-                if overflowed {
+                let initial = self.registers[first as usize];
+                let other = self.registers[second as usize];
+                let (sum, carry) = initial.overflowing_add(other);
+                if carry {
                     self.registers[0xF] = 1;
                 }
                 else {
@@ -393,10 +390,9 @@ impl Cpu {
                 self.pc += 2;
             },
             Opcode::SubtractRegisters { first, second } => {
-                let (diff, borrowed) =
-                    self.registers[first as usize].overflowing_sub(
-                        self.registers[second as usize]
-                    );
+                let initial = self.registers[first as usize];
+                let other = self.registers[second as usize];
+                let (diff, borrowed) = initial.overflowing_sub(other);
                 if borrowed {
                     self.registers[0xF] = 0;
                 }
@@ -407,29 +403,38 @@ impl Cpu {
                 self.pc += 2;
             },
             Opcode::AssignRegisterBitshiftRight { first, second } => {
-                self.registers[0xF] = self.registers[first as usize] & 0x01;
-                self.registers[first as usize] =
-                    self.registers[second as usize] >> 1;
+                let other = self.registers[second as usize];
+                let lsb = other & 0b0000_0001;
+                self.registers[0xF] = lsb;
+                self.registers[first as usize] = other >> 1;
                 self.pc += 2;
             },
             Opcode::SubtractFirstRegister { first, second } => {
-                let result = self.registers[second as usize] -
-                             self.registers[first as usize];
-                self.registers[first as usize] = result;
+                let initial = self.registers[first as usize];
+                let other = self.registers[second as usize];
+                let (diff, borrowed) = other.overflowing_sub(initial);
+                if borrowed {
+                    self.registers[0xF] = 0;
+                }
+                else {
+                    self.registers[0xF] = 1;
+                }
+                self.registers[first as usize] = diff as u8;
+
                 self.pc += 2;
             },
             Opcode::AssignRegistersBitshiftLeft { first, second } => {
-                self.registers[0xF] =
-                    (self.registers[first as usize] & 0x80) >> 7;
+                let msb = (self.registers[second as usize] & 0b1000_0000) >> 7;
+                self.registers[0xF] = msb;
                 let result = self.registers[second as usize] << 1;
                 self.registers[first as usize] = result;
                 self.registers[second as usize] = result;
                 self.pc += 2;
             },
             Opcode::SkipIfRegistersNotEqual { first, second } => {
-                if self.registers[first as usize] !=
-                   self.registers[second as usize]
-                {
+                let initial = self.registers[first as usize];
+                let other = self.registers[second as usize];
+                if initial != other {
                     self.pc += 4;
                 }
                 else {
@@ -440,8 +445,9 @@ impl Cpu {
                 self.index_reg = addr;
                 self.pc += 2;
             },
-            Opcode::SetProgramCounter { register_addr, opcode_addr } => {
-                self.pc = register_addr + opcode_addr;
+            Opcode::SetProgramCounter(addr) => {
+                self.pc = self.registers[0x0] as u16 + addr;
+                self.pc += 2;
             },
             Opcode::AssignRandomValue { addr, value } => {
                 let result = thread_rng().gen_range(0, 255) & value;
@@ -449,61 +455,33 @@ impl Cpu {
                 self.pc += 2;
             },
             Opcode::Draw { x, y, height } => {
-                // let mut pixel_was_unset = false;
-                // self.registers[0xF] = 0;
-
-                // for col in 0..height {
-                //     let cell = self.memory[(self.index_reg + col) as usize];
-                //     for row in 0..8 {
-                //         let i = ((row+x)*32 + (col+y)) as usize;
-                //         let curr_pixel = self.display[i];
-                //         let new_pixel = cell & (0b1000_0000 >> row);
-                //         let new_pixel = match new_pixel {
-                //             0 => core::Pixel::Black,
-                //             _ => core::Pixel::White,
-                //         };
-
-                //         match (curr_pixel, new_pixel) {
-                //             (core::Pixel::White, core::Pixel::Black) => {
-                //                 pixel_was_unset = true;
-                //             },
-                //             _ => {},
-                //         }
-                //         self.display[i] = new_pixel;
-                //     }
-                // }
-                // self.registers[0xF] = match pixel_was_unset {
-                //     true => 1,
-                //     false => 0,
-                // };
-
                 let loc_x = self.registers[x as usize];
                 let loc_y = self.registers[y as usize];
                 self.registers[0xF] = 0;
-                for y_line in 0..height {
-                    let addr = self.index_reg + y_line;
-                    let pixel = self.memory[addr as usize];
-                    for x_line in 0..8 {
-                        if pixel & (0x80 >> x_line) != 0 {
-                            let sprite_loc = loc_x as u16 + x_line +
-                                             ((loc_y as u16 + y_line)*
-                                              core::DISPLAY_WIDTH as u16);
-                            let screen_size = (
-                                core::DISPLAY_HEIGHT*core::DISPLAY_WIDTH
-                            ) as u16;
-                            let relative_loc = sprite_loc % screen_size;
-                            let curr_pixel = {
-                                self.display[relative_loc as usize]
+
+                for col in 0..height {
+                    let cell = self.memory[(self.index_reg + col) as usize];
+                    for row in 0..8 {
+                        if cell & (0b1000_0000 >> row) != 0 {
+                            let actual_pos = {
+                                (row+loc_x as u16) +
+                                (col+loc_y as u16)*core::DISPLAY_WIDTH as u16
                             };
+                            let relative_pos = actual_pos % (
+                                core::DISPLAY_WIDTH*core::DISPLAY_HEIGHT
+                            ) as u16;
+
                             let new_pixel;
-                            match curr_pixel {
-                                core::Pixel::Black => {
+                            match self.display[relative_pos as usize] {
+                                core::Pixel::White => {
                                     self.registers[0xF] = 1;
-                                    new_pixel = core::Pixel::White;
+                                    new_pixel = core::Pixel::Black;
                                 },
-                                _ => { new_pixel = core::Pixel::Black },
+                                _ => {
+                                    new_pixel = core::Pixel:: White;
+                                },
                             }
-                            self.display[relative_loc as usize] = new_pixel;
+                            self.display[relative_pos as usize] = new_pixel;
                         }
                     }
                 }
@@ -558,7 +536,7 @@ impl Cpu {
                 self.pc += 2;
             },
             Opcode::AddToIndexRegister(addr) => {
-                self.index_reg += addr;
+                self.index_reg += self.registers[addr as usize] as u16;
                 self.pc += 2;
             },
             Opcode::SetIndexRegisterToSpriteAddr(addr) => {
@@ -568,23 +546,21 @@ impl Cpu {
             Opcode::SetBCD(addr) => {
                 let reg = self.registers[addr as usize];
                 self.memory[self.index_reg as usize] = reg / 100;
-                self.memory[(self.index_reg+1) as usize] = (reg/10) % 10;
-                self.memory[(self.index_reg+2) as usize] = (reg%100) % 10;
+                self.memory[(self.index_reg+1) as usize] = (reg / 10) % 10;
+                self.memory[(self.index_reg+2) as usize] = (reg % 100) % 10;
                 self.pc += 2;
             },
             Opcode::DumpRegister(addr) => {
                 for i in 0..addr+1 {
-                    self.memory[self.index_reg as usize] =
-                        self.registers[i as usize];
-                    self.index_reg += 1;
+                    let value = self.registers[i as usize];
+                    self.memory[(self.index_reg + i) as usize] = value;
                 }
                 self.pc += 2;
             },
             Opcode::LoadRegister(addr) => {
                 for i in 0..addr+1 {
-                    self.registers[i as usize] =
-                        self.memory[self.index_reg as usize];
-                    self.index_reg += 1;
+                    let value = self.memory[(self.index_reg + i) as usize];
+                    self.registers[i as usize] = value;
                 }
                 self.pc += 2;
             },
