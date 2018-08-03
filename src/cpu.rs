@@ -68,6 +68,9 @@ pub struct Cpu {
 }
 
 impl Cpu {
+    /// Creates a new Cpu
+    /// The program counter starts at 0x200
+    /// Vectors are used instead of arrays for flexibility
     pub fn new() -> Self {
         Cpu {
             pc: 0x200,
@@ -88,6 +91,7 @@ impl Cpu {
         }
     }
 
+    /// Loads the Chip-8 fontset into Cpu memory
     pub fn load_fontset(&mut self) {
         let fontset: [u8; 80] = [
             0xF0, 0x90, 0x90, 0x90, 0xF0,
@@ -112,6 +116,7 @@ impl Cpu {
         }
     }
 
+    /// Loads the contents of the selected Chip-8 rom into Cpu memory
     pub fn load_rom(&mut self, path: &str) -> std::io::Result<()> {
         let mut rom = File::open(path)?;
         let mut buffer = vec![];
@@ -122,6 +127,50 @@ impl Cpu {
         Ok(())
     }
 
+    /// Checks an opcode to see if it exists
+    /// If the opcode is legal, the corresponding instruction is returned for
+    /// the Cpu to execute
+    /// If the opcode is illegal, an error is returned and the program is
+    /// aborted
+    ///
+    /// # Arguments
+    ///
+    /// * `opcode` - An unsigned 16-bit integer that is to be verified by
+    /// the function
+    ///
+    /// # Example 1: Legal opcode
+    ///
+    /// ```
+    /// let cpu = new Cpu::new();
+    /// match cpu.decode(0x00E0) {
+    ///     Ok(cpu::Opcode::ClearDisplay) => {
+    ///         // 0x00E0 is a legal opcode and corresponds to this function
+    ///         // Therefore this code will be executed
+    ///     },
+    ///     Err(cpu::CpuError::IllegalInstruction(opcode)) => {
+    ///         panic!("Illegal CPU instruction: {:x}", opcode)
+    ///    },
+    /// }
+    /// ```
+    ///
+    /// # Example 2: Illegal opcode
+    ///
+    /// ```
+    /// let cpu = new Cpu::new();
+    /// match cpu.decode(0xE100) {
+    ///     Ok(cpu::Opcode::ClearDisplay) => {},
+    ///     Err(cpu::CpuError::IllegalInstruction(opcode)) => {
+    ///         // 0xE100 is an illegal opcode
+    ///         // Therefore the program will terminate
+    ///         panic!("Illegal CPU instruction: {:x}", opcode)
+    ///    },
+    /// }
+    /// ```
+    ///
+    /// NOTE: Other opcodes not included in match statement for brevity
+    /// NOTE: This example uses the function as a public method, but the
+    /// function is in fact private and should be used within the context
+    /// of the Cpu object
     fn decode(&mut self, opcode: u16) -> Result<Opcode, CpuError> {
         match opcode {
             0x00E0 => Ok(Opcode::ClearDisplay),
@@ -288,6 +337,26 @@ impl Cpu {
         }
     }
 
+    /// Takes the current opcode in memory and attempts to decode it
+    /// If the opcode is legal, the corresponding instruction is executed
+    /// If the opcode is illegal, an error is returned and the program is
+    /// aborted
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let cpu = new Cpu::new();
+    /// match cpu.step() {
+    ///     Ok(()) => {
+    ///         // Opcode was legal
+    ///     },
+    ///     Err(cpu::CpuError::IllegalInstruction(opcode)) => {
+    ///         // Opcode was illegal
+    ///         // Abort program
+    ///         panic!("Illegal CPU instruction: {:x}", opcode)
+    ///    },
+    /// }
+    /// ```
     fn step(&mut self) -> Result<(), CpuError> {
         let opcode_high = self.memory[self.pc as usize];
         let opcode_low = self.memory[self.pc as usize + 1];
@@ -568,6 +637,34 @@ impl Cpu {
         Ok(())
     }
 
+    /// Executes the next cycle of the Cpu in an infinite loop
+    /// First, checks to see if a key was pressed
+    /// Second, verifies and executes the next opcode in memory
+    /// Third, increments or resets the Cpu timers
+    /// Redraws the screen if necessary
+    ///
+    /// # Arguments
+    ///
+    /// * `sdl_context` - A reference to an Sdl object, which is used to
+    /// initialize the event loop as well as core functions, such as playing
+    /// sounds and rendering the display
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let cpu = new Cpu::new();
+    /// let sdl_context = sdl2::init().unwrap();
+    /// match cpu.run(&sdl_context) {
+    ///     Ok(()) => {
+    ///         // Opcode was legal
+    ///     },
+    ///     Err(cpu::CpuError::IllegalInstruction(opcode)) => {
+    ///         // Opcode was illegal
+    ///         // Abort program
+    ///         panic!("Illegal CPU instruction: {:x}", opcode)
+    ///    },
+    /// }
+    /// ```
     pub fn run(&mut self, sdl_context: &Sdl) -> Result<(), CpuError> {
         let mut event_pump = sdl_context.event_pump().unwrap();
         let mut core = core::Core::new(&sdl_context);
@@ -597,6 +694,30 @@ impl Cpu {
         Ok(())
     }
 
+    /// Increments or resets the sound and delay timers
+    /// The function checks to see if the Cpu counter is equal to 10 before
+    /// changing the timers
+    /// This value was chosen in order to maintain a cpu clock rate of 600 Hz
+    /// Without the counter, the timers would execute at a rate of 60 Hz, so
+    /// the timers must wait by a factor of 10 in order to maintain speed with
+    /// the cpu
+    ///
+    /// # Arguments
+    ///
+    /// * `core` - A reference to a Core object, which here is used to
+    /// play and stop sounds
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let cpu = new Cpu::new();
+    /// let sdl_context = sdl2::init().unwrap();
+    /// let mut core = core::Core::new(&sdl_context);
+    /// cpu.update_timers(&mut core);
+    /// ```
+    /// NOTE: This example uses the function as a public method, but the
+    /// function is in fact private and should be used within the context
+    /// of the Cpu object
     fn update_timers(&mut self, core: &mut Core) {
         if self.counter == 10 {
             if self.delay_timer > 0 { self.delay_timer -= 1; }

@@ -10,6 +10,7 @@ use cpu::Cpu;
 
 pub const DISPLAY_HEIGHT: u32 = 32;
 pub const DISPLAY_WIDTH: u32 = 64;
+/// Used to help Sdl accurately draw the screen
 const SCALE_FACTOR: u32 = 12;
 
 #[derive(Clone, Copy)]
@@ -52,6 +53,7 @@ pub struct Core {
 }
 
 impl Core {
+    /// Creates a new Core object
     pub fn new(sdl_context: &Sdl) -> Self {
         let video_subsystem = sdl_context.video().unwrap();
         let window = video_subsystem.window(
@@ -92,6 +94,15 @@ impl Core {
         }
     }
 
+    /// Redraws the screen
+    ///
+    /// # Arguments
+    ///
+    /// * `cpu` - A reference to a Cpu object, which is used to be able to
+    /// read from the display values
+    /// This tells the core which values to color black and which to color
+    /// white
+    ///
     pub fn draw(&mut self, cpu: &mut Cpu) {
         for i in 0..(DISPLAY_WIDTH*DISPLAY_HEIGHT) as usize {
             let curr_pixel = cpu.display[i];
@@ -115,6 +126,14 @@ impl Core {
         self.canvas.present();
     }
 
+    /// Signals to the Cpu when keys are pressed
+    ///
+    /// # Arguments
+    ///
+    /// * `cpu` - A reference to a Cpu object, which is used to be able to
+    /// set the values of the key states
+    /// * `keycode` - Indicates the particular key that was pressed
+    ///
     pub fn handle_key_down(&mut self, cpu: &mut Cpu, keycode: Keycode) {
         match keycode {
             Keycode::Num1 => { cpu.keys[0x1] = KeyState::Pressed },
@@ -137,6 +156,15 @@ impl Core {
         }
     }
 
+    /// Signals to the Cpu when keys are released
+    /// See handle_key_down() for a comparison
+    ///
+    /// # Arguments
+    ///
+    /// * `cpu` - A reference to a Cpu object, which is used to be able to
+    /// set the values of the key states
+    /// * `keycode` - Indicates the particular key that was released
+    ///
     pub fn handle_key_up(&mut self, cpu: &mut Cpu, keycode: Keycode) {
         match keycode {
             Keycode::Num1 => { cpu.keys[0x1] = KeyState::Released },
@@ -159,10 +187,12 @@ impl Core {
         }
     }
 
+    /// Plays a basic sound byte using the Sdl AudioDevice
     pub fn play_sound(&mut self) {
         self.audio_device.resume();
     }
 
+    /// Stops a basic sound byte using the Sdl AudioDevice
     pub fn stop_sound(&mut self) {
         self.audio_device.pause();
     }
